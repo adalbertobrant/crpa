@@ -1,11 +1,8 @@
-# app_crpa_streamlit.py
-
 import streamlit as st
-import yfinance as yf
-import numpy as np
-from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
+from datetime import datetime
+import numpy as np
 import re
 
 st.set_page_config(page_title="Country Risk Premium - Brasil", layout="centered")
@@ -14,29 +11,15 @@ st.set_page_config(page_title="Country Risk Premium - Brasil", layout="centered"
 # Funções de dados e cálculo
 # ============================
 
-def fetch_us_treasuries():
-    treasuries = {
-        '2Y': '^FVX',
-        '5Y': '^FVX',
-        '10Y': '^TNX',
-        '30Y': '^TYX'
-    }
-    us_data = []
-    for dur, ticker in treasuries.items():
-        try:
-            bond = yf.Ticker(ticker)
-            hist = bond.history(period="1d")
-            if hist.empty:
-                continue  # evita erro ao acessar .iloc[-1]
-            yield_pct = hist['Close'].iloc[-1]
-            yield_decimal = yield_pct / 100 if yield_pct > 1 else yield_pct
-            duration = float(dur.strip('Y'))
-            us_data.append((duration, yield_decimal))
-        except Exception as e:
-            print(f"Erro ao buscar {ticker}: {e}")
-            continue
-    return sorted(us_data, key=lambda x: x[0])
-
+def fetch_us_bonds_from_investing():
+    try:
+        url = 'https://www.investing.com/rates-bonds/u.s.-10-year-bond-yield'
+        us_yield = get_investing_data(url)
+        if us_yield:
+            return [(10.0, us_yield / 100)]  # Convertendo % para decimal
+        return []
+    except:
+        return []
 
 def fetch_brazil_bonds():
     try:
@@ -61,17 +44,9 @@ def fetch_bcb_exchange_rate():
 
 def calculate_crp(br_data, us_data):
     try:
-        br_durations = np.array([d for d, y in br_data])
-        br_yields = np.array([y for d, y in br_data])
-        us_durations = np.array([d for d, y in us_data])
-        us_yields = np.array([y for d, y in us_data])
-        min_dur = max(min(br_durations), min(us_durations))
-        max_dur = min(max(br_durations), max(us_durations))
-        common_durations = np.linspace(min_dur, max_dur, 100)
-        br_interp = np.interp(common_durations, br_durations, br_yields)
-        us_interp = np.interp(common_durations, us_durations, us_yields)
-        spread = br_interp - us_interp
-        crp_bps = np.mean(spread) * 10000
+        br_yield = br_data[0][1]
+        us_yield = us_data[0][1]
+        crp_bps = (br_yield - us_yield) * 10000
         return round(crp_bps, 2)
     except:
         return None
@@ -123,7 +98,7 @@ st.markdown("Este app calcula o **Country Risk Premium (CRP)** com base em dados
 
 if st.button("🔄 Atualizar dados"):
     with st.spinner("Coletando dados..."):
-        us_data = fetch_us_treasuries()
+        us_data = fetch_us_bonds_from_investing()
         br_data = fetch_brazil_bonds()
         crp = calculate_crp(br_data, us_data) if us_data and br_data else None
 
@@ -141,8 +116,6 @@ if st.button("🔄 Atualizar dados"):
         analise = taxa_br - taxa_eua - cambio / 100 - crp / 10000
         st.subheader("📉 Análise Integrada")
         st.markdown(f"**Resultado:** {analise:.2f}% {'(⚠️ Maior risco Brasil)' if analise < 0 else '(✅ Risco controlado)'}")
-
 else:
     st.info("Clique no botão acima para iniciar a análise.")
-
 
