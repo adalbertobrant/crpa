@@ -26,13 +26,17 @@ def fetch_us_treasuries():
         try:
             bond = yf.Ticker(ticker)
             hist = bond.history(period="1d")
+            if hist.empty:
+                continue  # evita erro ao acessar .iloc[-1]
             yield_pct = hist['Close'].iloc[-1]
             yield_decimal = yield_pct / 100 if yield_pct > 1 else yield_pct
             duration = float(dur.strip('Y'))
             us_data.append((duration, yield_decimal))
-        except:
+        except Exception as e:
+            print(f"Erro ao buscar {ticker}: {e}")
             continue
     return sorted(us_data, key=lambda x: x[0])
+
 
 def fetch_brazil_bonds():
     try:
